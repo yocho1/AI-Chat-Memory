@@ -4,6 +4,7 @@ from utils.gemini_client import GeminiClient
 from utils.vector_store import VectorStore
 import uuid
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -113,7 +114,5 @@ def health():
     })
 
 if __name__ == '__main__':
-    print("Starting AI Chat with Memory Backend...")
-    print("Data will be stored in: ./chroma_db/")
-    print("Server running on: http://localhost:5000")
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
