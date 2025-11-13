@@ -29,7 +29,8 @@ const ChatInterface = () => {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const messagesEndRef = useRef(null)
 
-  const API_BASE = 'http://localhost:5000/api'
+  // Replace the API_BASE line with:
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api'
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
