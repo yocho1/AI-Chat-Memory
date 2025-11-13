@@ -1,25 +1,48 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from utils.gemini_client import GeminiClient
-from utils.vector_store import VectorStore
 import uuid
 from datetime import datetime
 import os
+import sys
 
 app = Flask(__name__)
-CORS(app)
 
-# Initialize clients
-gemini_client = GeminiClient()
-vector_store = VectorStore()
+# Configure CORS for production
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["ai-chat-memory.vercel.app", "http://localhost:3000", "*"],
+        "methods": ["GET", "POST"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
-# In-memory session storage (replace with database in production)
+# Try to import dependencies with error handling
+try:
+    from utils.gemini_client import GeminiClient
+    from utils.vector_store import VectorStore
+    gemini_client = GeminiClient()
+    vector_store = VectorStore()
+    dependencies_loaded = True
+except ImportError as e:
+    print(f"Import error: {e}")
+    dependencies_loaded = False
+except Exception as e:
+    print(f"Initialization error: {e}")
+    dependencies_loaded = False
+
+# In-memory session storage
 sessions = {}
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
+    if not dependencies_loaded:
+        return jsonify({'error': 'Backend dependencies not loaded'}), 500
+    
     try:
         data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
+            
         user_message = data.get('message', '').strip()
         session_id = data.get('session_id')
         
@@ -37,18 +60,19 @@ def chat():
             }
             print(f"Created new session: {session_id}")
         
-        # Search for relevant context from user's past conversations
+        # Search for relevant context
         context = vector_store.search_similar_conversations(session_id, user_message)
         
         if context:
-            print(f"Using context from {len(context.split(chr(10) + chr(10)))} previous conversations")
+            context_lines = context.split('\n\n')
+            print(f"Using context from {len(context_lines)} previous conversations")
         else:
             print("No relevant context found - starting fresh")
         
         # Generate AI response
         ai_response = gemini_client.generate_response(user_message, context)
         
-        # Store conversation in vector database
+        # Store conversation
         vector_store.add_conversation(session_id, user_message, ai_response)
         
         # Update session history
@@ -72,47 +96,47 @@ def chat():
         print(f"Error in /api/chat: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/history/<session_id>', methods=['GET'])
-def get_history(session_id):
-    """Get conversation history for a session"""
-    try:
-        if session_id in sessions:
-            return jsonify(sessions[session_id]['conversation_history'])
-        else:
-            return jsonify([])
-    except Exception as e:
-        print(f"❌ Error getting history: {e}")
-        return jsonify([])
-
-@app.route('/api/sessions', methods=['GET'])
-def get_sessions():
-    """Get all sessions (for demo purposes)"""
-    return jsonify(list(sessions.keys()))
-
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    """Get statistics about stored conversations"""
-    try:
-        total_conversations = vector_store.get_conversation_count()
-        active_sessions = len(sessions)
-        
-        stats = {
-            'total_conversations': total_conversations,
-            'active_sessions': active_sessions,
-            'storage_path': vector_store.data_dir
-        }
-        return jsonify(stats)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/health', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({
-        'status': 'healthy', 
+        'status': 'healthy' if dependencies_loaded else 'degraded',
         'timestamp': datetime.now().isoformat(),
-        'service': 'AI Chat with Memory Backend'
+        'service': 'AI Chat with Memory Backend',
+        'dependencies_loaded': dependencies_loaded
+    })
+
+@app.route('/api/test', methods=['GET'])
+def test():
+    return jsonify({
+        'message': 'Backend is running!',
+        'dependencies_loaded': dependencies_loaded,
+        'sessions_count': len(sessions)
+    })
+
+@app.route('/api/config', methods=['GET'])
+def config_check():
+    import os
+    api_key = os.getenv('GOOGLE_API_KEY')
+    return jsonify({
+        'api_key_set': bool(api_key and api_key != 'your_google_gemini_api_key_here'),
+        'port': os.getenv('PORT'),
+        'environment': os.getenv('RAILWAY_ENVIRONMENT', 'production')
+    })
+
+# Root endpoint
+@app.route('/')
+def root():
+    return jsonify({
+        'message': 'AI Chat with Memory Backend',
+        'endpoints': {
+            'health': '/api/health',
+            'test': '/api/test', 
+            'config': '/api/config',
+            'chat': '/api/chat (POST)'
+        }
     })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    print(f"Starting server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
