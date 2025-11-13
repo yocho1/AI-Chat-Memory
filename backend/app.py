@@ -41,7 +41,7 @@ def chat():
         context = vector_store.search_similar_conversations(session_id, user_message)
         
         if context:
-            print(f"Using context from {len(context.split('\\n\\n'))} previous conversations")
+            print(f"Using context from {len(context.split(chr(10) + chr(10)))} previous conversations")
         else:
             print("No relevant context found - starting fresh")
         
