@@ -8,7 +8,7 @@ import traceback
 
 app = Flask(__name__)
 
-# Configure CORS properly - fix the origin URL
+# Configure CORS properly
 CORS(app, resources={
     r"/api/*": {
         "origins": ["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"],
@@ -17,11 +17,14 @@ CORS(app, resources={
     }
 })
 
-# Or use this simpler CORS configuration for testing:
-# CORS(app, origins=["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"])
+# Global variables
+gemini_client = None
+vector_store = None
+dependencies_loaded = False
+sessions = {}
 
-# Initialize dependencies with better error handling
 def initialize_dependencies():
+    global gemini_client, vector_store, dependencies_loaded
     try:
         print("Initializing dependencies...")
         
@@ -35,18 +38,16 @@ def initialize_dependencies():
         vector_store = VectorStore()
         print("✅ Vector store initialized")
         
-        return gemini_client, vector_store, True
+        dependencies_loaded = True
+        print("✅ All dependencies loaded successfully")
         
     except Exception as e:
         print(f"❌ Dependency initialization failed: {e}")
         print(traceback.format_exc())
-        return None, None, False
+        dependencies_loaded = False
 
-# Initialize on startup
-gemini_client, vector_store, dependencies_loaded = initialize_dependencies()
-
-# In-memory session storage
-sessions = {}
+# Initialize dependencies
+initialize_dependencies()
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
@@ -134,6 +135,15 @@ def test():
         'vector_store_working': dependencies_loaded and vector_store is not None
     })
 
+# Simple test endpoint
+@app.route('/api/ping', methods=['GET'])
+def ping():
+    return jsonify({
+        'message': 'pong',
+        'status': 'ok',
+        'timestamp': datetime.now().isoformat()
+    })
+
 # Root endpoint
 @app.route('/')
 def root():
@@ -143,6 +153,7 @@ def root():
         'endpoints': {
             'health': '/api/health',
             'test': '/api/test',
+            'ping': '/api/ping',
             'chat': '/api/chat (POST)'
         }
     })
