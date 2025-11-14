@@ -8,14 +8,8 @@ import traceback
 
 app = Flask(__name__)
 
-# Configure CORS properly
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+# Configure CORS properly - use simpler configuration
+CORS(app, origins=["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"])
 
 # Global variables
 gemini_client = None
@@ -26,7 +20,7 @@ sessions = {}
 def initialize_dependencies():
     global gemini_client, vector_store, dependencies_loaded
     try:
-        print("Initializing dependencies...")
+        print("🚀 Initializing dependencies...")
         
         # Import and initialize Gemini client
         from utils.gemini_client import GeminiClient
@@ -47,22 +41,31 @@ def initialize_dependencies():
         dependencies_loaded = False
 
 # Initialize dependencies
+print("🔧 Starting application initialization...")
 initialize_dependencies()
 
-@app.route('/api/chat', methods=['POST'])
+@app.before_request
+def before_request():
+    print(f"📥 Incoming request: {request.method} {request.path}")
+
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
+    print("🟡 Chat endpoint called")
     try:
         if not dependencies_loaded:
+            print("🔴 Dependencies not loaded")
             return jsonify({'error': 'Backend dependencies not loaded. Check server logs.'}), 500
         
         data = request.json
         if not data:
+            print("🔴 No JSON data received")
             return jsonify({'error': 'No JSON data received'}), 400
             
         user_message = data.get('message', '').strip()
         session_id = data.get('session_id')
         
         if not user_message:
+            print("🔴 Empty message")
             return jsonify({'error': 'Message is required'}), 400
         
         print(f"📨 Received message: {user_message}")
@@ -117,6 +120,7 @@ def chat():
 
 @app.route('/api/health', methods=['GET'])
 def health():
+    print("🟡 Health endpoint called")
     return jsonify({
         'status': 'healthy' if dependencies_loaded else 'degraded',
         'timestamp': datetime.now().isoformat(),
@@ -127,6 +131,7 @@ def health():
 
 @app.route('/api/test', methods=['GET'])
 def test():
+    print("🟡 Test endpoint called")
     return jsonify({
         'message': 'Backend is running!',
         'dependencies_loaded': dependencies_loaded,
@@ -138,6 +143,7 @@ def test():
 # Simple test endpoint
 @app.route('/api/ping', methods=['GET'])
 def ping():
+    print("🟡 Ping endpoint called")
     return jsonify({
         'message': 'pong',
         'status': 'ok',
@@ -147,6 +153,7 @@ def ping():
 # Root endpoint
 @app.route('/')
 def root():
+    print("🟡 Root endpoint called")
     return jsonify({
         'message': 'AI Chat with Memory Backend',
         'status': 'running',
@@ -156,6 +163,17 @@ def root():
             'ping': '/api/ping',
             'chat': '/api/chat (POST)'
         }
+    })
+
+@app.route('/api/debug', methods=['GET'])
+def debug():
+    print("🟡 Debug endpoint called")
+    return jsonify({
+        'python_version': sys.version,
+        'flask_ready': True,
+        'dependencies_loaded': dependencies_loaded,
+        'sessions_count': len(sessions),
+        'timestamp': datetime.now().isoformat()
     })
 
 if __name__ == '__main__':
