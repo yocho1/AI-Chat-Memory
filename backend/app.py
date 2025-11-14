@@ -8,14 +8,17 @@ import traceback
 
 app = Flask(__name__)
 
-# Configure CORS properly - allow all origins for now
+# Configure CORS properly - fix the origin URL
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["ai-chat-memory-gumx.vercel.app", "http://localhost:3000"],
+        "origins": ["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
 })
+
+# Or use this simpler CORS configuration for testing:
+# CORS(app, origins=["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"])
 
 # Initialize dependencies with better error handling
 def initialize_dependencies():
