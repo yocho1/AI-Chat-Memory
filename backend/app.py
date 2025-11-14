@@ -9,17 +9,14 @@ import traceback
 def create_app():
     app = Flask(__name__)
     
-    # COMPREHENSIVE CORS configuration for Railway
+    # SIMPLIFIED CORS - Allow all origins initially for debugging
     CORS(app, 
-        origins=[
-            'https://ai-chat-memory-gumx.vercel.app',
-            'http://localhost:3000'
-        ],
+        origins='*',  # Temporarily allow all
         supports_credentials=True,
         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
         allow_headers=['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-        expose_headers=['Content-Type', 'Authorization'],
-        max_age=600
+        expose_headers=['Content-Type'],
+        max_age=3600
     )
     
     # Global variables
@@ -57,45 +54,89 @@ def create_app():
     print("🔧 Starting application initialization...")
     initialize_dependencies()
 
-    # Manual CORS handler as backup
-    @app.after_request
-    def after_request(response):
-        origin = request.headers.get('Origin', '')
-        allowed_origins = [
-            'https://ai-chat-memory-gumx.vercel.app',
-            'http://localhost:3000'
-        ]
-        
-        if origin in allowed_origins:
-            response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        response.headers.add('Access-Control-Max-Age', '600')
-        return response
+    # Root route - important for Railway health checks
+    @app.route('/', methods=['GET'])
+    def root():
+        return jsonify({
+            'message': 'AI Chat with Memory Backend',
+            'status': 'running',
+            'version': '1.0.0',
+            'endpoints': {
+                'health': '/api/health',
+                'test': '/api/test',
+                'ping': '/api/ping',
+                'chat': '/api/chat (POST)'
+            }
+        }), 200
 
-    # Explicit OPTIONS handler for all routes
-    @app.route('/api/chat', methods=['OPTIONS', 'POST'])
-    def handle_chat_options():
+    @app.route('/api/health', methods=['GET'])
+    def health():
+        return jsonify({
+            'status': 'healthy' if dependencies_loaded else 'degraded',
+            'timestamp': datetime.now().isoformat(),
+            'service': 'AI Chat with Memory Backend',
+            'dependencies_loaded': dependencies_loaded,
+            'sessions_count': len(sessions),
+            'gemini_available': gemini_client is not None,
+            'vector_store_available': vector_store is not None
+        }), 200
+
+    @app.route('/api/test', methods=['GET'])
+    def test():
+        return jsonify({
+            'message': 'Backend is running!',
+            'dependencies_loaded': dependencies_loaded,
+            'sessions_count': len(sessions),
+            'gemini_working': dependencies_loaded and gemini_client is not None,
+            'vector_store_working': dependencies_loaded and vector_store is not None,
+            'timestamp': datetime.now().isoformat()
+        }), 200
+
+    @app.route('/api/ping', methods=['GET'])
+    def ping():
+        return jsonify({
+            'message': 'pong',
+            'status': 'ok',
+            'timestamp': datetime.now().isoformat()
+        }), 200
+
+    @app.route('/api/chat', methods=['POST', 'OPTIONS'])
+    def handle_chat():
+        # Handle preflight
         if request.method == 'OPTIONS':
             response = jsonify({'status': 'ok'})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
             return response, 200
         
         try:
-            if not dependencies_loaded:
-                return jsonify({'error': 'Backend dependencies not loaded. Check server logs.'}), 500
+            print(f"📨 Received POST /api/chat")
+            print(f"📋 Headers: {dict(request.headers)}")
+            print(f"📦 Content-Type: {request.content_type}")
             
-            data = request.json
+            if not dependencies_loaded:
+                print("❌ Dependencies not loaded")
+                return jsonify({
+                    'error': 'Backend dependencies not loaded. Check server logs.',
+                    'dependencies_loaded': False
+                }), 500
+            
+            data = request.get_json(force=True)
             if not data:
+                print("❌ No JSON data received")
                 return jsonify({'error': 'No JSON data received'}), 400
+            
+            print(f"📊 Received data: {data}")
                 
             user_message = data.get('message', '').strip()
             session_id = data.get('session_id')
             
             if not user_message:
+                print("❌ Empty message")
                 return jsonify({'error': 'Message is required'}), 400
             
-            print(f"📨 Received message: {user_message}")
+            print(f"📨 Processing message: {user_message[:50]}...")
             
             # Create new session if doesn't exist
             if not session_id or session_id not in sessions:
@@ -107,20 +148,22 @@ def create_app():
                 print(f"🆕 Created new session: {session_id}")
             
             # Search for relevant context
+            print(f"🔍 Searching for context...")
             context = vector_store.search_similar_conversations(session_id, user_message)
             
             if context:
                 context_lines = context.split('\n\n')
-                print(f"📚 Using context from {len(context_lines)} previous conversations")
+                print(f"📚 Found {len(context_lines)} relevant conversations")
             else:
-                print("🆕 No relevant context found - starting fresh")
+                print("🆕 No relevant context found")
             
             # Generate AI response
             print("🤖 Generating AI response...")
             ai_response = gemini_client.generate_response(user_message, context)
-            print(f"✅ AI response generated: {ai_response[:100]}...")
+            print(f"✅ Response generated: {ai_response[:100]}...")
             
             # Store conversation
+            print("💾 Storing conversation...")
             vector_store.add_conversation(session_id, user_message, ai_response)
             
             # Update session history
@@ -137,67 +180,40 @@ def create_app():
                 'conversation_count': vector_store.get_conversation_count(session_id)
             }
             
-            print(f"✅ Response generated for session {session_id}")
-            return jsonify(response_data)
+            print(f"✅ Request completed successfully for session {session_id}")
+            return jsonify(response_data), 200
             
         except Exception as e:
             print(f"❌ Error in /api/chat: {str(e)}")
             traceback.print_exc()
-            return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+            return jsonify({
+                'error': f'Internal server error: {str(e)}',
+                'type': type(e).__name__
+            }), 500
 
-    @app.route('/api/health', methods=['OPTIONS', 'GET'])
-    def health():
-        if request.method == 'OPTIONS':
-            return '', 200
+    # Global error handlers
+    @app.errorhandler(404)
+    def not_found(e):
         return jsonify({
-            'status': 'healthy' if dependencies_loaded else 'degraded',
-            'timestamp': datetime.now().isoformat(),
-            'service': 'AI Chat with Memory Backend',
-            'dependencies_loaded': dependencies_loaded,
-            'sessions_count': len(sessions)
-        })
+            'error': 'Endpoint not found',
+            'path': request.path
+        }), 404
 
-    @app.route('/api/test', methods=['OPTIONS', 'GET'])
-    def test():
-        if request.method == 'OPTIONS':
-            return '', 200
+    @app.errorhandler(500)
+    def internal_error(e):
         return jsonify({
-            'message': 'Backend is running!',
-            'dependencies_loaded': dependencies_loaded,
-            'sessions_count': len(sessions),
-            'gemini_working': dependencies_loaded and gemini_client is not None,
-            'vector_store_working': dependencies_loaded and vector_store is not None
-        })
+            'error': 'Internal server error',
+            'details': str(e)
+        }), 500
 
-    @app.route('/api/ping', methods=['OPTIONS', 'GET'])
-    def ping():
-        if request.method == 'OPTIONS':
-            return '', 200
-        return jsonify({
-            'message': 'pong',
-            'status': 'ok',
-            'timestamp': datetime.now().isoformat()
-        })
-
-    @app.route('/', methods=['OPTIONS', 'GET'])
-    def root():
-        if request.method == 'OPTIONS':
-            return '', 200
-        return jsonify({
-            'message': 'AI Chat with Memory Backend',
-            'status': 'running',
-            'endpoints': {
-                'health': '/api/health',
-                'test': '/api/test',
-                'ping': '/api/ping',
-                'chat': '/api/chat (POST)'
-            }
-        })
-
-    # Catch-all OPTIONS handler
-    @app.route('/<path:path>', methods=['OPTIONS'])
-    def options_catch_all(path):
-        return '', 200
+    # After request handler to add CORS headers
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
 
     return app
 
@@ -207,4 +223,5 @@ app = create_app()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"🚀 Starting server on port {port}")
+    print(f"🌍 Environment: {os.environ.get('RAILWAY_ENVIRONMENT', 'local')}")
     app.run(host='0.0.0.0', port=port, debug=False)
