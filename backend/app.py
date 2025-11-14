@@ -9,11 +9,16 @@ import traceback
 def create_app():
     app = Flask(__name__)
     
-    # Enhanced CORS configuration - FIXED
-    CORS(app, origins=[
-        'https://ai-chat-memory-gumx.vercel.app',
-        'http://localhost:3000'
-    ])
+    # Enhanced CORS configuration for Railway - SIMPLIFIED
+    CORS(app, 
+        origins=[
+            'https://ai-chat-memory-gumx.vercel.app',
+            'http://localhost:3000'
+        ],
+        supports_credentials=True,
+        methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allow_headers=['Content-Type', 'Authorization', 'X-Requested-With']
+    )
     
     # Global variables
     gemini_client = None
@@ -50,28 +55,6 @@ def create_app():
     print("🔧 Starting application initialization...")
     initialize_dependencies()
 
-    # Add manual CORS headers for OPTIONS requests
-    @app.after_request
-    def after_request(response):
-        response.headers.add('Access-Control-Allow-Origin', 'https://ai-chat-memory-gumx.vercel.app')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
-
-    # Handle OPTIONS requests manually
-    @app.route('/api/chat', methods=['OPTIONS'])
-    def options_chat():
-        return '', 200
-
-    @app.route('/api/health', methods=['OPTIONS'])
-    def options_health():
-        return '', 200
-
-    @app.route('/api/ping', methods=['OPTIONS'])
-    def options_ping():
-        return '', 200
-
     @app.before_request
     def before_request():
         print(f"📥 Incoming request: {request.method} {request.path}")
@@ -86,8 +69,15 @@ def create_app():
     def handle_404(error):
         return jsonify({'error': 'Endpoint not found'}), 404
 
-    @app.route('/api/chat', methods=['POST'])
+    @app.errorhandler(405)
+    def handle_405(error):
+        return jsonify({'error': 'Method not allowed'}), 405
+
+    @app.route('/api/chat', methods=['POST', 'OPTIONS'])
     def chat():
+        if request.method == 'OPTIONS':
+            return '', 200
+            
         try:
             if not dependencies_loaded:
                 return jsonify({'error': 'Backend dependencies not loaded. Check server logs.'}), 500
@@ -152,8 +142,10 @@ def create_app():
             traceback.print_exc()
             return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
-    @app.route('/api/health', methods=['GET'])
+    @app.route('/api/health', methods=['GET', 'OPTIONS'])
     def health():
+        if request.method == 'OPTIONS':
+            return '', 200
         return jsonify({
             'status': 'healthy' if dependencies_loaded else 'degraded',
             'timestamp': datetime.now().isoformat(),
@@ -162,8 +154,10 @@ def create_app():
             'sessions_count': len(sessions)
         })
 
-    @app.route('/api/test', methods=['GET'])
+    @app.route('/api/test', methods=['GET', 'OPTIONS'])
     def test():
+        if request.method == 'OPTIONS':
+            return '', 200
         return jsonify({
             'message': 'Backend is running!',
             'dependencies_loaded': dependencies_loaded,
@@ -172,16 +166,20 @@ def create_app():
             'vector_store_working': dependencies_loaded and vector_store is not None
         })
 
-    @app.route('/api/ping', methods=['GET'])
+    @app.route('/api/ping', methods=['GET', 'OPTIONS'])
     def ping():
+        if request.method == 'OPTIONS':
+            return '', 200
         return jsonify({
             'message': 'pong',
             'status': 'ok',
             'timestamp': datetime.now().isoformat()
         })
 
-    @app.route('/')
+    @app.route('/', methods=['GET', 'OPTIONS'])
     def root():
+        if request.method == 'OPTIONS':
+            return '', 200
         return jsonify({
             'message': 'AI Chat with Memory Backend',
             'status': 'running',
