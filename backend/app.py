@@ -5,10 +5,12 @@ from datetime import datetime
 import os
 import sys
 import traceback
+import signal
+import atexit
 
 app = Flask(__name__)
 
-# Configure CORS properly - use simpler configuration
+# Configure CORS properly
 CORS(app, origins=["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"])
 
 # Global variables
@@ -16,6 +18,20 @@ gemini_client = None
 vector_store = None
 dependencies_loaded = False
 sessions = {}
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    """Global exception handler"""
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    
+    print("💥 CRITICAL: Uncaught exception:", file=sys.stderr)
+    print(f"Type: {exc_type}", file=sys.stderr)
+    print(f"Value: {exc_value}", file=sys.stderr)
+    traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
+
+# Set global exception handler
+sys.excepthook = handle_exception
 
 def initialize_dependencies():
     global gemini_client, vector_store, dependencies_loaded
@@ -34,19 +50,62 @@ def initialize_dependencies():
         
         dependencies_loaded = True
         print("✅ All dependencies loaded successfully")
+        return True
         
     except Exception as e:
         print(f"❌ Dependency initialization failed: {e}")
-        print(traceback.format_exc())
+        traceback.print_exc()
         dependencies_loaded = False
+        return False
+
+def safe_import_check():
+    """Check if all required modules can be imported safely"""
+    try:
+        # Test imports that happen at runtime
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        import numpy as np
+        print("✅ All runtime imports successful")
+        return True
+    except Exception as e:
+        print(f"❌ Runtime import failed: {e}")
+        traceback.print_exc()
+        return False
+
+# Initialize application
+print("🔧 Starting application initialization...")
+
+# Test basic imports first
+if safe_import_check():
+    print("✅ Basic imports check passed")
+else:
+    print("❌ Basic imports check failed")
 
 # Initialize dependencies
-print("🔧 Starting application initialization...")
-initialize_dependencies()
+if initialize_dependencies():
+    print("🎉 Application started successfully!")
+else:
+    print("⚠️ Application started with degraded functionality")
 
 @app.before_request
 def before_request():
     print(f"📥 Incoming request: {request.method} {request.path}")
+
+@app.after_request
+def after_request(response):
+    print(f"📤 Response: {response.status_code} for {request.method} {request.path}")
+    return response
+
+@app.errorhandler(500)
+def handle_500(error):
+    print(f"💥 Internal Server Error: {error}")
+    traceback.print_exc()
+    return jsonify({'error': 'Internal server error'}), 500
+
+@app.errorhandler(404)
+def handle_404(error):
+    print(f"🔍 404 Not Found: {request.path}")
+    return jsonify({'error': 'Endpoint not found'}), 404
 
 @app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
@@ -115,7 +174,7 @@ def chat():
         
     except Exception as e:
         print(f"❌ Error in /api/chat: {str(e)}")
-        print(traceback.format_exc())
+        traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 @app.route('/api/health', methods=['GET'])
@@ -175,6 +234,27 @@ def debug():
         'sessions_count': len(sessions),
         'timestamp': datetime.now().isoformat()
     })
+
+# Add a simple sync worker test
+@app.route('/api/simple', methods=['GET'])
+def simple():
+    print("🟡 Simple endpoint called")
+    return jsonify({
+        'message': 'Simple endpoint working!',
+        'status': 'success'
+    })
+
+def signal_handler(signum, frame):
+    print(f"🛑 Received signal {signum}, shutting down gracefully...")
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+@atexit.register
+def cleanup():
+    print("🧹 Application shutting down...")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
