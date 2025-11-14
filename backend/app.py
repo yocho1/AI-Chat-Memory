@@ -11,7 +11,7 @@ app = Flask(__name__)
 # Configure CORS properly - allow all origins for now
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"],
+        "origins": ["ai-chat-memory-gumx.vercel.app", "http://localhost:3000"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }

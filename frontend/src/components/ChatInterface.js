@@ -32,7 +32,7 @@ const ChatInterface = () => {
   // Replace the API_BASE line with:
   const API_BASE =
     process.env.REACT_APP_API_URL ||
-    'https://ai-chat-memory-image-ai.up.railway.app/api'
+    'ai-chat-memory-image-ai.up.railway.app'
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
