@@ -35,5 +35,3 @@ A sophisticated AI chat application powered by Google's Gemini AI with persisten
 - **Google Gemini AI** - AI language model
 - **ChromaDB** - Vector store for memory
 - **Sentence Transformers** - Text embeddings
-
-## 🚀 Live Demo: https://ai-chat-memory-gumx.vercel.app/
