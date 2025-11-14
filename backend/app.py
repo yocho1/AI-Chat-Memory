@@ -1,27 +1,19 @@
-import os
-import uuid
-from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import traceback
+import uuid
+from datetime import datetime
+import os
 import sys
+import traceback
 
 def create_app():
     app = Flask(__name__)
     
-    # Enhanced CORS configuration
-    CORS_ORIGINS = [
-        'http://localhost:3000',
+    # Enhanced CORS configuration - FIXED
+    CORS(app, origins=[
         'https://ai-chat-memory-gumx.vercel.app',
-    ]
-    
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": CORS_ORIGINS,
-            "methods": ["GET", "POST", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-    })
+        'http://localhost:3000'
+    ])
     
     # Global variables
     gemini_client = None
@@ -58,14 +50,31 @@ def create_app():
     print("🔧 Starting application initialization...")
     initialize_dependencies()
 
+    # Add manual CORS headers for OPTIONS requests
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Origin', 'https://ai-chat-memory-gumx.vercel.app')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    # Handle OPTIONS requests manually
+    @app.route('/api/chat', methods=['OPTIONS'])
+    def options_chat():
+        return '', 200
+
+    @app.route('/api/health', methods=['OPTIONS'])
+    def options_health():
+        return '', 200
+
+    @app.route('/api/ping', methods=['OPTIONS'])
+    def options_ping():
+        return '', 200
+
     @app.before_request
     def before_request():
         print(f"📥 Incoming request: {request.method} {request.path}")
-
-    @app.after_request
-    def after_request(response):
-        print(f"📤 Response: {response.status_code} for {request.method} {request.path}")
-        return response
 
     @app.errorhandler(500)
     def handle_500(error):

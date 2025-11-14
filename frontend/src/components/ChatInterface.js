@@ -80,116 +80,47 @@ const ChatInterface = () => {
     }
   }
 
- const sendMessage = async (e) => {
-  e.preventDefault();
-  if (!inputMessage.trim() || isLoading) return;
+  const sendMessage = async (e) => {
+    e.preventDefault()
+    if (!inputMessage.trim() || isLoading) return
 
-  const userMessage = inputMessage.trim();
-  setInputMessage('');
+    const userMessage = inputMessage.trim()
+    setInputMessage('')
 
-  // Add user message with animation
-  const userMessageId = Date.now() + '-user';
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: userMessageId,
-      type: 'user',
-      content: userMessage,
-      timestamp: new Date(),
-    },
-  ]);
-
-  playSound('send');
-  setIsLoading(true);
-  setIsTyping(true);
-
-  try {
-    console.log('Sending to:', `${API_BASE}/chat`);
-    
-    const response = await axios.post(
-      `${API_BASE}/chat`,
-      {
-        message: userMessage,
-        session_id: sessionId,
-      },
-      {
-        timeout: 10000, // 10 second timeout
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    console.log('Response received:', response.data);
-
-    const {
-      response: aiResponse,
-      session_id,
-      conversation_count,
-    } = response.data;
-
-    if (session_id && !sessionId) {
-      setSessionId(session_id);
-    }
-
-    if (conversation_count) {
-      setConversationCount(conversation_count);
-    }
-
-    // Simulate typing delay for better UX
-    setTimeout(() => {
-      const aiMessageId = Date.now() + '-ai';
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: aiMessageId,
-          type: 'assistant',
-          content: aiResponse,
-          timestamp: new Date(),
-        },
-      ]);
-      playSound('receive');
-      setIsLoading(false);
-      setIsTyping(false);
-    }, 1500 + Math.random() * 1000);
-  } catch (error) {
-    console.error('Error sending message:', error);
-    
-    let errorMessage = 'Sorry, I encountered an error. Please try again.';
-    
-    if (error.response?.status === 502) {
-      errorMessage = 'Server is temporarily unavailable. The backend might be restarting. Please try again in 30 seconds.';
-    } else if (error.code === 'ECONNABORTED') {
-      errorMessage = 'Request timeout. Please check your connection and try again.';
-    } else if (error.response?.status >= 500) {
-      errorMessage = 'Server error. Please try again later.';
-    }
-    
-    const errorMessageId = Date.now() + '-error';
+    // Add user message with animation
+    const userMessageId = Date.now() + '-user'
     setMessages((prev) => [
       ...prev,
       {
-        id: errorMessageId,
-        type: 'assistant',
-        content: errorMessage,
-        isError: true,
+        id: userMessageId,
+        type: 'user',
+        content: userMessage,
         timestamp: new Date(),
       },
-    ]);
-    setIsLoading(false);
-    setIsTyping(false);
-  }
-};
+    ])
 
     playSound('send')
     setIsLoading(true)
     setIsTyping(true)
 
     try {
-      const response = await axios.post(`${API_BASE}/chat`, {
-        message: userMessage,
-        session_id: sessionId,
-      })
+      console.log('Sending to:', `${API_BASE}/chat`)
+
+      const response = await axios.post(
+        `${API_BASE}/chat`,
+        {
+          message: userMessage,
+          session_id: sessionId,
+        },
+        {
+          timeout: 10000, // 10 second timeout
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      console.log('Response received:', response.data)
 
       const {
         response: aiResponse,
@@ -223,14 +154,28 @@ const ChatInterface = () => {
       }, 1500 + Math.random() * 1000)
     } catch (error) {
       console.error('Error sending message:', error)
+
+      let errorMessage = 'Sorry, I encountered an error. Please try again.'
+
+      if (error.response?.status === 502) {
+        errorMessage =
+          'Server is temporarily unavailable. The backend might be restarting. Please try again in 30 seconds.'
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage =
+          'Request timeout. Please check your connection and try again.'
+      } else if (error.response?.status >= 500) {
+        errorMessage = 'Server error. Please try again later.'
+      }
+
       const errorMessageId = Date.now() + '-error'
       setMessages((prev) => [
         ...prev,
         {
           id: errorMessageId,
           type: 'assistant',
-          content: 'Sorry, I encountered an error. Please try again.',
+          content: errorMessage,
           isError: true,
+          timestamp: new Date(),
         },
       ])
       setIsLoading(false)
@@ -244,19 +189,22 @@ const ChatInterface = () => {
     setConversationCount(0)
   }
 
- const formatTime = (date) => {
-  if (!date) return 'Just now'
-  
-  // Handle both Date objects and string timestamps
-  const dateObj = date instanceof Date ? date : new Date(date)
-  
-  // Check if date is valid
-  if (isNaN(dateObj.getTime())) {
-    return 'Just now'
+  const formatTime = (date) => {
+    if (!date) return 'Just now'
+
+    // Handle both Date objects and string timestamps
+    const dateObj = date instanceof Date ? date : new Date(date)
+
+    // Check if date is valid
+    if (isNaN(dateObj.getTime())) {
+      return 'Just now'
+    }
+
+    return dateObj.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
-  
-  return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
 
   return (
     <div className='min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4'>
@@ -476,82 +424,136 @@ const ChatInterface = () => {
                   </motion.div>
                 )}
 
-{messages.map((message, index) => (
-  <motion.div
-    key={message.id}
-    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-    animate={{ opacity: 1, y: 0, scale: 1 }}
-    transition={{ duration: 0.3, delay: index * 0.1 }}
-    className={`flex ${
-      message.type === 'user' ? 'justify-end' : 'justify-start'
-    } mb-6`}
-  >
-    <div
-      className={`flex max-w-[85%] ${
-        message.type === 'user'
-          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-          : 'bg-white/10 backdrop-blur-sm text-white border border-white/20'
-      } rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300`}
-    >
-      <div className='flex items-start space-x-3'>
-        {message.type === 'assistant' && (
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg'
-          >
-            <Bot className='h-5 w-5 text-white' />
-          </motion.div>
-        )}
+                {messages.map((message, index) => (
+                  <motion.div
+                    key={message.id}
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                    className={`flex ${
+                      message.type === 'user' ? 'justify-end' : 'justify-start'
+                    } mb-6 group`}
+                  >
+                    <div
+                      className={`flex max-w-[85%] ${
+                        message.type === 'user'
+                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                          : message.isError
+                          ? 'bg-red-500/20 border border-red-500/30 text-white'
+                          : 'bg-white/10 backdrop-blur-sm text-white border border-white/20'
+                      } rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300`}
+                    >
+                      <div className='flex items-start space-x-3'>
+                        {message.type === 'assistant' && (
+                          <motion.div
+                            whileHover={{ scale: 1.1 }}
+                            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg'
+                          >
+                            <Bot className='h-5 w-5 text-white' />
+                          </motion.div>
+                        )}
 
-        <div className='flex-1 min-w-0'>
-          <div className='flex items-center space-x-3 mb-2'>
-            <span className='font-semibold text-sm'>
-              {message.type === 'user' ? 'You' : 'AI Assistant'}
-            </span>
-            <span
-              className={`text-xs ${
-                message.type === 'user'
-                  ? 'text-blue-100'
-                  : 'text-purple-300'
-              }`}
-            >
-              {formatTime(message.timestamp)}
-            </span>
-          </div>
-          <p className='text-sm leading-relaxed whitespace-pre-wrap'>
-            {message.content}
-          </p>
-        </div>
+                        <div className='flex-1 min-w-0'>
+                          <div className='flex items-center space-x-3 mb-2'>
+                            <span className='font-semibold text-sm'>
+                              {message.type === 'user' ? 'You' : 'AI Assistant'}
+                              {message.isError && ' (Error)'}
+                            </span>
+                            <span
+                              className={`text-xs ${
+                                message.type === 'user'
+                                  ? 'text-blue-100'
+                                  : message.isError
+                                  ? 'text-red-300'
+                                  : 'text-purple-300'
+                              }`}
+                            >
+                              {formatTime(message.timestamp)}
+                            </span>
+                          </div>
+                          <p className='text-sm leading-relaxed whitespace-pre-wrap'>
+                            {message.content}
+                          </p>
+                        </div>
 
-        {message.type === 'user' && (
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center shadow-lg'
-          >
-            <User className='h-5 w-5 text-white' />
-          </motion.div>
-        )}
-      </div>
+                        {message.type === 'user' && (
+                          <motion.div
+                            whileHover={{ scale: 1.1 }}
+                            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center shadow-lg'
+                          >
+                            <User className='h-5 w-5 text-white' />
+                          </motion.div>
+                        )}
+                      </div>
 
-      {/* Copy Button */}
-      <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={() =>
-          copyToClipboard(message.content, message.id)
-        }
-        className='ml-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-white/20'
-        title='Copy message'
-      >
-        {copiedMessageId === message.id ? (
-          <CheckCheck className='h-4 w-4 text-green-400' />
-        ) : (
-          <Copy className='h-4 w-4 text-current' />
-        )}
-      </motion.button>
-    </div>
-  </motion.div>
-))}
+                      {/* Copy Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() =>
+                          copyToClipboard(message.content, message.id)
+                        }
+                        className='ml-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-white/20'
+                        title='Copy message'
+                      >
+                        {copiedMessageId === message.id ? (
+                          <CheckCheck className='h-4 w-4 text-green-400' />
+                        ) : (
+                          <Copy className='h-4 w-4 text-current' />
+                        )}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                ))}
+
+                {isTyping && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className='flex justify-start mb-6'
+                  >
+                    <div className='flex max-w-[85%] bg-white/10 backdrop-blur-sm text-white border border-white/20 rounded-2xl p-4 shadow-lg'>
+                      <div className='flex items-start space-x-3'>
+                        <motion.div
+                          whileHover={{ scale: 1.1 }}
+                          className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg'
+                        >
+                          <Bot className='h-5 w-5 text-white' />
+                        </motion.div>
+                        <div className='flex items-center space-x-1'>
+                          <motion.div
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              delay: 0,
+                            }}
+                            className='w-2 h-2 bg-white rounded-full'
+                          />
+                          <motion.div
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              delay: 0.2,
+                            }}
+                            className='w-2 h-2 bg-white rounded-full'
+                          />
+                          <motion.div
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              delay: 0.4,
+                            }}
+                            className='w-2 h-2 bg-white rounded-full'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <div ref={messagesEndRef} />
             </div>
@@ -593,6 +595,40 @@ const ChatInterface = () => {
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .glass {
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .glass-dark {
+          background: rgba(0, 0, 0, 0.2);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glow-text {
+          text-shadow: 0 0 20px rgba(192, 132, 252, 0.5);
+        }
+
+        .pulse-ai {
+          animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(168, 85, 247, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
+          }
+        }
+      `}</style>
     </div>
   )
 }
