@@ -9,15 +9,17 @@ import traceback
 def create_app():
     app = Flask(__name__)
     
-    # Enhanced CORS configuration for Railway - SIMPLIFIED
+    # COMPREHENSIVE CORS configuration for Railway
     CORS(app, 
         origins=[
             'https://ai-chat-memory-gumx.vercel.app',
             'http://localhost:3000'
         ],
         supports_credentials=True,
-        methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allow_headers=['Content-Type', 'Authorization', 'X-Requested-With']
+        methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+        allow_headers=['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+        expose_headers=['Content-Type', 'Authorization'],
+        max_age=600
     )
     
     # Global variables
@@ -55,29 +57,30 @@ def create_app():
     print("🔧 Starting application initialization...")
     initialize_dependencies()
 
-    @app.before_request
-    def before_request():
-        print(f"📥 Incoming request: {request.method} {request.path}")
+    # Manual CORS handler as backup
+    @app.after_request
+    def after_request(response):
+        origin = request.headers.get('Origin', '')
+        allowed_origins = [
+            'https://ai-chat-memory-gumx.vercel.app',
+            'http://localhost:3000'
+        ]
+        
+        if origin in allowed_origins:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Max-Age', '600')
+        return response
 
-    @app.errorhandler(500)
-    def handle_500(error):
-        print(f"💥 Internal Server Error: {error}")
-        traceback.print_exc()
-        return jsonify({'error': 'Internal server error'}), 500
-
-    @app.errorhandler(404)
-    def handle_404(error):
-        return jsonify({'error': 'Endpoint not found'}), 404
-
-    @app.errorhandler(405)
-    def handle_405(error):
-        return jsonify({'error': 'Method not allowed'}), 405
-
-    @app.route('/api/chat', methods=['POST', 'OPTIONS'])
-    def chat():
+    # Explicit OPTIONS handler for all routes
+    @app.route('/api/chat', methods=['OPTIONS', 'POST'])
+    def handle_chat_options():
         if request.method == 'OPTIONS':
-            return '', 200
-            
+            response = jsonify({'status': 'ok'})
+            return response, 200
+        
         try:
             if not dependencies_loaded:
                 return jsonify({'error': 'Backend dependencies not loaded. Check server logs.'}), 500
@@ -142,7 +145,7 @@ def create_app():
             traceback.print_exc()
             return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
-    @app.route('/api/health', methods=['GET', 'OPTIONS'])
+    @app.route('/api/health', methods=['OPTIONS', 'GET'])
     def health():
         if request.method == 'OPTIONS':
             return '', 200
@@ -154,7 +157,7 @@ def create_app():
             'sessions_count': len(sessions)
         })
 
-    @app.route('/api/test', methods=['GET', 'OPTIONS'])
+    @app.route('/api/test', methods=['OPTIONS', 'GET'])
     def test():
         if request.method == 'OPTIONS':
             return '', 200
@@ -166,7 +169,7 @@ def create_app():
             'vector_store_working': dependencies_loaded and vector_store is not None
         })
 
-    @app.route('/api/ping', methods=['GET', 'OPTIONS'])
+    @app.route('/api/ping', methods=['OPTIONS', 'GET'])
     def ping():
         if request.method == 'OPTIONS':
             return '', 200
@@ -176,7 +179,7 @@ def create_app():
             'timestamp': datetime.now().isoformat()
         })
 
-    @app.route('/', methods=['GET', 'OPTIONS'])
+    @app.route('/', methods=['OPTIONS', 'GET'])
     def root():
         if request.method == 'OPTIONS':
             return '', 200
@@ -190,6 +193,11 @@ def create_app():
                 'chat': '/api/chat (POST)'
             }
         })
+
+    # Catch-all OPTIONS handler
+    @app.route('/<path:path>', methods=['OPTIONS'])
+    def options_catch_all(path):
+        return '', 200
 
     return app
 

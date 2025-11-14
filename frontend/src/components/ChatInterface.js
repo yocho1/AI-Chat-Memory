@@ -113,10 +113,11 @@ const ChatInterface = () => {
           session_id: sessionId,
         },
         {
-          timeout: 10000, // 10 second timeout
+          timeout: 30000, // 30 second timeout
           headers: {
             'Content-Type': 'application/json',
           },
+          withCredentials: true, // Add this line
         }
       )
 
@@ -154,17 +155,20 @@ const ChatInterface = () => {
       }, 1500 + Math.random() * 1000)
     } catch (error) {
       console.error('Error sending message:', error)
+      console.error('Error details:', error.response)
 
       let errorMessage = 'Sorry, I encountered an error. Please try again.'
 
       if (error.response?.status === 502) {
-        errorMessage =
-          'Server is temporarily unavailable. The backend might be restarting. Please try again in 30 seconds.'
+        errorMessage = 'Backend is restarting. Please try again in 30 seconds.'
       } else if (error.code === 'ECONNABORTED') {
-        errorMessage =
-          'Request timeout. Please check your connection and try again.'
+        errorMessage = 'Request timeout. Please try again.'
       } else if (error.response?.status >= 500) {
         errorMessage = 'Server error. Please try again later.'
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Endpoint not found. Please check the API URL.'
+      } else if (error.response?.data?.error) {
+        errorMessage = `Backend error: ${error.response.data.error}`
       }
 
       const errorMessageId = Date.now() + '-error'
