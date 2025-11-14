@@ -8,28 +8,14 @@ import traceback
 
 app = Flask(__name__)
 
-# Configure CORS properly - allow all origins for now to debug
-CORS(app, origins=['https://ai-chat-memory-gumx.vercel.app', 'http://localhost:3000'], 
-     supports_credentials=True)
-
-# Or allow all origins for testing:
-CORS(app, origins='*', supports_credentials=True)
-
-# Add CORS headers manually
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
-
-# Handle OPTIONS requests for CORS preflight
-@app.route('/api/chat', methods=['OPTIONS'])
-@app.route('/api/health', methods=['OPTIONS']) 
-@app.route('/api/test', methods=['OPTIONS'])
-def options_handler():
-    return '', 200
+# Configure CORS properly - allow all origins for now
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://ai-chat-memory-gumx.vercel.app", "http://localhost:3000"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Initialize dependencies with better error handling
 def initialize_dependencies():
@@ -145,15 +131,6 @@ def test():
         'vector_store_working': dependencies_loaded and vector_store is not None
     })
 
-# Simple test endpoint that doesn't require dependencies
-@app.route('/api/simple', methods=['GET', 'POST'])
-def simple_test():
-    return jsonify({
-        'message': 'Simple endpoint working!',
-        'method': request.method,
-        'timestamp': datetime.now().isoformat()
-    })
-
 # Root endpoint
 @app.route('/')
 def root():
@@ -163,7 +140,6 @@ def root():
         'endpoints': {
             'health': '/api/health',
             'test': '/api/test',
-            'simple': '/api/simple',
             'chat': '/api/chat (POST)'
         }
     })

@@ -244,9 +244,19 @@ const ChatInterface = () => {
     setConversationCount(0)
   }
 
-  const formatTime = (date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+ const formatTime = (date) => {
+  if (!date) return 'Just now'
+  
+  // Handle both Date objects and string timestamps
+  const dateObj = date instanceof Date ? date : new Date(date)
+  
+  // Check if date is valid
+  if (isNaN(dateObj.getTime())) {
+    return 'Just now'
   }
+  
+  return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 
   return (
     <div className='min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4'>
@@ -466,128 +476,82 @@ const ChatInterface = () => {
                   </motion.div>
                 )}
 
-                {messages.map((message, index) => (
-                  <motion.div
-                    key={message.id}
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className={`flex ${
-                      message.type === 'user' ? 'justify-end' : 'justify-start'
-                    } mb-6`}
-                  >
-                    <div
-                      className={`flex max-w-[85%] ${
-                        message.type === 'user'
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                          : 'bg-white/10 backdrop-blur-sm text-white border border-white/20'
-                      } rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300`}
-                    >
-                      <div className='flex items-start space-x-3'>
-                        {message.type === 'assistant' && (
-                          <motion.div
-                            whileHover={{ scale: 1.1 }}
-                            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg'
-                          >
-                            <Bot className='h-5 w-5 text-white' />
-                          </motion.div>
-                        )}
+{messages.map((message, index) => (
+  <motion.div
+    key={message.id}
+    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+    animate={{ opacity: 1, y: 0, scale: 1 }}
+    transition={{ duration: 0.3, delay: index * 0.1 }}
+    className={`flex ${
+      message.type === 'user' ? 'justify-end' : 'justify-start'
+    } mb-6`}
+  >
+    <div
+      className={`flex max-w-[85%] ${
+        message.type === 'user'
+          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+          : 'bg-white/10 backdrop-blur-sm text-white border border-white/20'
+      } rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all duration-300`}
+    >
+      <div className='flex items-start space-x-3'>
+        {message.type === 'assistant' && (
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg'
+          >
+            <Bot className='h-5 w-5 text-white' />
+          </motion.div>
+        )}
 
-                        <div className='flex-1 min-w-0'>
-                          <div className='flex items-center space-x-3 mb-2'>
-                            <span className='font-semibold text-sm'>
-                              {message.type === 'user' ? 'You' : 'AI Assistant'}
-                            </span>
-                            <span
-                              className={`text-xs ${
-                                message.type === 'user'
-                                  ? 'text-blue-100'
-                                  : 'text-purple-300'
-                              }`}
-                            >
-                              {formatTime(message.timestamp)}
-                            </span>
-                          </div>
-                          <p className='text-sm leading-relaxed whitespace-pre-wrap'>
-                            {message.content}
-                          </p>
-                        </div>
+        <div className='flex-1 min-w-0'>
+          <div className='flex items-center space-x-3 mb-2'>
+            <span className='font-semibold text-sm'>
+              {message.type === 'user' ? 'You' : 'AI Assistant'}
+            </span>
+            <span
+              className={`text-xs ${
+                message.type === 'user'
+                  ? 'text-blue-100'
+                  : 'text-purple-300'
+              }`}
+            >
+              {formatTime(message.timestamp)}
+            </span>
+          </div>
+          <p className='text-sm leading-relaxed whitespace-pre-wrap'>
+            {message.content}
+          </p>
+        </div>
 
-                        {message.type === 'user' && (
-                          <motion.div
-                            whileHover={{ scale: 1.1 }}
-                            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center shadow-lg'
-                          >
-                            <User className='h-5 w-5 text-white' />
-                          </motion.div>
-                        )}
-                      </div>
+        {message.type === 'user' && (
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center shadow-lg'
+          >
+            <User className='h-5 w-5 text-white' />
+          </motion.div>
+        )}
+      </div>
 
-                      {/* Copy Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() =>
-                          copyToClipboard(message.content, message.id)
-                        }
-                        className='ml-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-white/20'
-                        title='Copy message'
-                      >
-                        {copiedMessageId === message.id ? (
-                          <CheckCheck className='h-4 w-4 text-green-400' />
-                        ) : (
-                          <Copy className='h-4 w-4 text-current' />
-                        )}
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-
-              {isTyping && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className='flex justify-start mb-6'
-                >
-                  <div className='bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 shadow-lg'>
-                    <div className='flex items-center space-x-3'>
-                      <div className='flex-shrink-0 w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center'>
-                        <Bot className='h-5 w-5 text-white' />
-                      </div>
-                      <div className='flex space-x-1'>
-                        <motion.div
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{
-                            duration: 1,
-                            repeat: Infinity,
-                            delay: 0,
-                          }}
-                          className='h-2 w-2 bg-purple-400 rounded-full'
-                        />
-                        <motion.div
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{
-                            duration: 1,
-                            repeat: Infinity,
-                            delay: 0.2,
-                          }}
-                          className='h-2 w-2 bg-purple-400 rounded-full'
-                        />
-                        <motion.div
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{
-                            duration: 1,
-                            repeat: Infinity,
-                            delay: 0.4,
-                          }}
-                          className='h-2 w-2 bg-purple-400 rounded-full'
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+      {/* Copy Button */}
+      <motion.button
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() =>
+          copyToClipboard(message.content, message.id)
+        }
+        className='ml-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-white/20'
+        title='Copy message'
+      >
+        {copiedMessageId === message.id ? (
+          <CheckCheck className='h-4 w-4 text-green-400' />
+        ) : (
+          <Copy className='h-4 w-4 text-current' />
+        )}
+      </motion.button>
+    </div>
+  </motion.div>
+))}
 
               <div ref={messagesEndRef} />
             </div>
