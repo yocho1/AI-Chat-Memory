@@ -80,24 +80,106 @@ const ChatInterface = () => {
     }
   }
 
-  const sendMessage = async (e) => {
-    e.preventDefault()
-    if (!inputMessage.trim() || isLoading) return
+ const sendMessage = async (e) => {
+  e.preventDefault();
+  if (!inputMessage.trim() || isLoading) return;
 
-    const userMessage = inputMessage.trim()
-    setInputMessage('')
+  const userMessage = inputMessage.trim();
+  setInputMessage('');
 
-    // Add user message with animation
-    const userMessageId = Date.now() + '-user'
+  // Add user message with animation
+  const userMessageId = Date.now() + '-user';
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: userMessageId,
+      type: 'user',
+      content: userMessage,
+      timestamp: new Date(),
+    },
+  ]);
+
+  playSound('send');
+  setIsLoading(true);
+  setIsTyping(true);
+
+  try {
+    console.log('Sending to:', `${API_BASE}/chat`);
+    
+    const response = await axios.post(
+      `${API_BASE}/chat`,
+      {
+        message: userMessage,
+        session_id: sessionId,
+      },
+      {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    console.log('Response received:', response.data);
+
+    const {
+      response: aiResponse,
+      session_id,
+      conversation_count,
+    } = response.data;
+
+    if (session_id && !sessionId) {
+      setSessionId(session_id);
+    }
+
+    if (conversation_count) {
+      setConversationCount(conversation_count);
+    }
+
+    // Simulate typing delay for better UX
+    setTimeout(() => {
+      const aiMessageId = Date.now() + '-ai';
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: aiMessageId,
+          type: 'assistant',
+          content: aiResponse,
+          timestamp: new Date(),
+        },
+      ]);
+      playSound('receive');
+      setIsLoading(false);
+      setIsTyping(false);
+    }, 1500 + Math.random() * 1000);
+  } catch (error) {
+    console.error('Error sending message:', error);
+    
+    let errorMessage = 'Sorry, I encountered an error. Please try again.';
+    
+    if (error.response?.status === 502) {
+      errorMessage = 'Server is temporarily unavailable. The backend might be restarting. Please try again in 30 seconds.';
+    } else if (error.code === 'ECONNABORTED') {
+      errorMessage = 'Request timeout. Please check your connection and try again.';
+    } else if (error.response?.status >= 500) {
+      errorMessage = 'Server error. Please try again later.';
+    }
+    
+    const errorMessageId = Date.now() + '-error';
     setMessages((prev) => [
       ...prev,
       {
-        id: userMessageId,
-        type: 'user',
-        content: userMessage,
+        id: errorMessageId,
+        type: 'assistant',
+        content: errorMessage,
+        isError: true,
         timestamp: new Date(),
       },
-    ])
+    ]);
+    setIsLoading(false);
+    setIsTyping(false);
+  }
+};
 
     playSound('send')
     setIsLoading(true)

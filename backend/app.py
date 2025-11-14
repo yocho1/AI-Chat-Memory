@@ -4,35 +4,17 @@ import uuid
 from datetime import datetime
 import os
 import sys
+import traceback
 
 app = Flask(__name__)
 
-# Configure CORS properly
-CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "https://ai-chat-memory-gumx.vercel.app",
-            "https://*.vercel.app",
-            "http://localhost:3000"
-        ],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+# Configure CORS properly - allow all origins for now to debug
+CORS(app)
 
-# Add CORS headers manually for OPTIONS requests
+# Add CORS headers manually
 @app.after_request
 def after_request(response):
-    origin = request.headers.get('Origin')
-    allowed_origins = [
-        "https://ai-chat-memory-gumx.vercel.app",
-        "https://*.vercel.app", 
-        "http://localhost:3000"
-    ]
-    
-    if origin and any(origin.endswith(domain.replace('*', '')) for domain in allowed_origins):
-        response.headers.add('Access-Control-Allow-Origin', origin)
-    
+    response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     response.headers.add('Access-Control-Allow-Credentials', 'true')
@@ -40,32 +22,45 @@ def after_request(response):
 
 # Handle OPTIONS requests for CORS preflight
 @app.route('/api/chat', methods=['OPTIONS'])
-def options_chat():
+@app.route('/api/health', methods=['OPTIONS']) 
+@app.route('/api/test', methods=['OPTIONS'])
+def options_handler():
     return '', 200
 
-# Try to import dependencies with error handling
-try:
-    from utils.gemini_client import GeminiClient
-    from utils.vector_store import VectorStore
-    gemini_client = GeminiClient()
-    vector_store = VectorStore()
-    dependencies_loaded = True
-except ImportError as e:
-    print(f"Import error: {e}")
-    dependencies_loaded = False
-except Exception as e:
-    print(f"Initialization error: {e}")
-    dependencies_loaded = False
+# Initialize dependencies with better error handling
+def initialize_dependencies():
+    try:
+        print("Initializing dependencies...")
+        
+        # Import and initialize Gemini client
+        from utils.gemini_client import GeminiClient
+        gemini_client = GeminiClient()
+        print("✅ Gemini client initialized")
+        
+        # Import and initialize vector store
+        from utils.vector_store import VectorStore
+        vector_store = VectorStore()
+        print("✅ Vector store initialized")
+        
+        return gemini_client, vector_store, True
+        
+    except Exception as e:
+        print(f"❌ Dependency initialization failed: {e}")
+        print(traceback.format_exc())
+        return None, None, False
+
+# Initialize on startup
+gemini_client, vector_store, dependencies_loaded = initialize_dependencies()
 
 # In-memory session storage
 sessions = {}
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    if not dependencies_loaded:
-        return jsonify({'error': 'Backend dependencies not loaded'}), 500
-    
     try:
+        if not dependencies_loaded:
+            return jsonify({'error': 'Backend dependencies not loaded. Check server logs.'}), 500
+        
         data = request.json
         if not data:
             return jsonify({'error': 'No JSON data received'}), 400
@@ -76,7 +71,7 @@ def chat():
         if not user_message:
             return jsonify({'error': 'Message is required'}), 400
         
-        print(f"Received message: {user_message}")
+        print(f"📨 Received message: {user_message}")
         
         # Create new session if doesn't exist
         if not session_id or session_id not in sessions:
@@ -85,19 +80,21 @@ def chat():
                 'created_at': datetime.now().isoformat(),
                 'conversation_history': []
             }
-            print(f"Created new session: {session_id}")
+            print(f"🆕 Created new session: {session_id}")
         
         # Search for relevant context
         context = vector_store.search_similar_conversations(session_id, user_message)
         
         if context:
             context_lines = context.split('\n\n')
-            print(f"Using context from {len(context_lines)} previous conversations")
+            print(f"📚 Using context from {len(context_lines)} previous conversations")
         else:
-            print("No relevant context found - starting fresh")
+            print("🆕 No relevant context found - starting fresh")
         
         # Generate AI response
+        print("🤖 Generating AI response...")
         ai_response = gemini_client.generate_response(user_message, context)
+        print(f"✅ AI response generated: {ai_response[:100]}...")
         
         # Store conversation
         vector_store.add_conversation(session_id, user_message, ai_response)
@@ -116,32 +113,41 @@ def chat():
             'conversation_count': vector_store.get_conversation_count(session_id)
         }
         
-        print(f"Response generated for session {session_id}")
+        print(f"✅ Response generated for session {session_id}")
         return jsonify(response_data)
         
     except Exception as e:
-        print(f"Error in /api/chat: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+        print(f"❌ Error in /api/chat: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
-@app.route('/api/health', methods=['GET', 'OPTIONS'])
+@app.route('/api/health', methods=['GET'])
 def health():
-    if request.method == 'OPTIONS':
-        return '', 200
     return jsonify({
         'status': 'healthy' if dependencies_loaded else 'degraded',
         'timestamp': datetime.now().isoformat(),
         'service': 'AI Chat with Memory Backend',
-        'dependencies_loaded': dependencies_loaded
+        'dependencies_loaded': dependencies_loaded,
+        'sessions_count': len(sessions)
     })
 
-@app.route('/api/test', methods=['GET', 'OPTIONS'])
+@app.route('/api/test', methods=['GET'])
 def test():
-    if request.method == 'OPTIONS':
-        return '', 200
     return jsonify({
         'message': 'Backend is running!',
         'dependencies_loaded': dependencies_loaded,
-        'sessions_count': len(sessions)
+        'sessions_count': len(sessions),
+        'gemini_working': dependencies_loaded and gemini_client is not None,
+        'vector_store_working': dependencies_loaded and vector_store is not None
+    })
+
+# Simple test endpoint that doesn't require dependencies
+@app.route('/api/simple', methods=['GET', 'POST'])
+def simple_test():
+    return jsonify({
+        'message': 'Simple endpoint working!',
+        'method': request.method,
+        'timestamp': datetime.now().isoformat()
     })
 
 # Root endpoint
@@ -149,14 +155,17 @@ def test():
 def root():
     return jsonify({
         'message': 'AI Chat with Memory Backend',
+        'status': 'running',
         'endpoints': {
             'health': '/api/health',
-            'test': '/api/test', 
+            'test': '/api/test',
+            'simple': '/api/simple',
             'chat': '/api/chat (POST)'
         }
     })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"Starting server on port {port}")
+    print(f"🚀 Starting server on port {port}")
+    print(f"✅ Dependencies loaded: {dependencies_loaded}")
     app.run(host='0.0.0.0', port=port, debug=False)
