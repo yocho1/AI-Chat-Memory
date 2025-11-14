@@ -7,14 +7,41 @@ import sys
 
 app = Flask(__name__)
 
-# Configure CORS for production
+# Configure CORS properly
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["ai-chat-memory.vercel.app", "http://localhost:3000", "*"],
-        "methods": ["GET", "POST"],
-        "allow_headers": ["Content-Type"]
+        "origins": [
+            "https://ai-chat-memory-gumx.vercel.app",
+            "https://*.vercel.app",
+            "http://localhost:3000"
+        ],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
     }
 })
+
+# Add CORS headers manually for OPTIONS requests
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    allowed_origins = [
+        "https://ai-chat-memory-gumx.vercel.app",
+        "https://*.vercel.app", 
+        "http://localhost:3000"
+    ]
+    
+    if origin and any(origin.endswith(domain.replace('*', '')) for domain in allowed_origins):
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
+
+# Handle OPTIONS requests for CORS preflight
+@app.route('/api/chat', methods=['OPTIONS'])
+def options_chat():
+    return '', 200
 
 # Try to import dependencies with error handling
 try:
@@ -96,8 +123,10 @@ def chat():
         print(f"Error in /api/chat: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/health', methods=['GET'])
+@app.route('/api/health', methods=['GET', 'OPTIONS'])
 def health():
+    if request.method == 'OPTIONS':
+        return '', 200
     return jsonify({
         'status': 'healthy' if dependencies_loaded else 'degraded',
         'timestamp': datetime.now().isoformat(),
@@ -105,22 +134,14 @@ def health():
         'dependencies_loaded': dependencies_loaded
     })
 
-@app.route('/api/test', methods=['GET'])
+@app.route('/api/test', methods=['GET', 'OPTIONS'])
 def test():
+    if request.method == 'OPTIONS':
+        return '', 200
     return jsonify({
         'message': 'Backend is running!',
         'dependencies_loaded': dependencies_loaded,
         'sessions_count': len(sessions)
-    })
-
-@app.route('/api/config', methods=['GET'])
-def config_check():
-    import os
-    api_key = os.getenv('GOOGLE_API_KEY')
-    return jsonify({
-        'api_key_set': bool(api_key and api_key != 'your_google_gemini_api_key_here'),
-        'port': os.getenv('PORT'),
-        'environment': os.getenv('RAILWAY_ENVIRONMENT', 'production')
     })
 
 # Root endpoint
@@ -131,7 +152,6 @@ def root():
         'endpoints': {
             'health': '/api/health',
             'test': '/api/test', 
-            'config': '/api/config',
             'chat': '/api/chat (POST)'
         }
     })
