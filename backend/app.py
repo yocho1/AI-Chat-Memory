@@ -9,7 +9,11 @@ import traceback
 app = Flask(__name__)
 
 # Configure CORS properly - allow all origins for now to debug
-CORS(app)
+CORS(app, origins=['https://ai-chat-memory-gumx.vercel.app', 'http://localhost:3000'], 
+     supports_credentials=True)
+
+# Or allow all origins for testing:
+CORS(app, origins='*', supports_credentials=True)
 
 # Add CORS headers manually
 @app.after_request
